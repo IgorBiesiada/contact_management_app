@@ -5,7 +5,7 @@ from .forms import ContactForm
 from django.urls import reverse_lazy
 from .services import get_weather_for_city
 from rest_framework import viewsets
-from .serializers import ContactSerializer
+from .serializers import ContactSerializer, ContactDetailSerializer
 import csv
 from django.contrib import messages
 from django.db.models import Q
@@ -75,7 +75,11 @@ class ContactDeleteView(DeleteView):
 
 class ContactViewSet(viewsets.ModelViewSet):
     queryset = Contact.objects.all()
-    serializer_class = ContactSerializer
+
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return ContactSerializer
+        return ContactDetailSerializer
 
 
 @transaction.atomic

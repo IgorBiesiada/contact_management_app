@@ -37,7 +37,7 @@ document.addEventListener("DOMContentLoaded", (event) => {
         const phone = /^[0-9]{9}$/;
 
         if (phoneNumber && !phone.test(phoneNumber.value.trim())) {
-            showError(phoneNumber, 'Podaj poprawny numer telefonu min(9 cyfr).');
+            showError(phoneNumber, 'Podaj poprawny numer telefonu 9 cyfr.');
             hasErrors = true;
         }
         
