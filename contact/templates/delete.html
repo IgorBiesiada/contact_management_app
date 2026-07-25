@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block container %}
+<div class="card mt-4 shadow-sm bg-dark text-white border-danger">
+    <div class="card-header border-danger">
+        <h5 class="card-title text-danger mb-0">
+            <i class="bi bi-exclamation-triangle"></i> Potwierdzenie usunięcia
+        </h5>
+    </div>
+    <div class="card-body">
+        <p class="card-text fs-5">
+            Czy na pewno chcesz usunąć kontakt <strong class="text-warning">{{ object.first_name }} {{ object.last_name }}</strong>?
+        </p>
+        <form method="post" class="mt-4">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-danger">
+                <i class="bi bi-trash"></i> Tak, usuń
+            </button>
+            <a href="{% url 'contact:contact-list' %}" class="btn btn-secondary">Anuluj</a>
+        </form>
+    </div>
+</div>
+{% endblock %}

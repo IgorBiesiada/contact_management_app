@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Lista kontaktów{% endblock %}
+
+{% block container %}
+
+<form method="get" class="row g-2 mb-4 align-items-center">
+    <div class="col-md-5">
+        <input type="text" name="q" class="form-control" placeholder="Szukaj (imię, nazwisko, email, telefon)..." value="{{ request.GET.q }}">
+    </div>
+    <div class="col-md-4">
+        <select name="sort" class="form-select">
+            <option value="">Sortowanie domyślne</option>
+            <option value="last_name" {% if request.GET.sort == 'last_name' %}selected{% endif %}>Nazwisko (A-Z)</option>
+            <option value="-date" {% if request.GET.sort == '-date' %}selected{% endif %}>Data (od najnowszych)</option>
+            <option value="date" {% if request.GET.sort == 'date' %}selected{% endif %}>Data (od najstarszych)</option>
+        </select>
+    </div>
+    <div class="col-md-3">
+        <button type="submit" class="btn btn-success">Szukaj</button>
+        <a href="{% url 'contact:contact-list' %}" class="btn btn-secondary">Wyczyść</a>
+    </div>
+</form>
+
+{% for contact in contacts %}
+    <div class="card mb-3 shadow-sm bg-dark text-white border-secondary">
+        <div class="card-header">
+            <strong>{{ contact.first_name }} {{ contact.last_name }}</strong>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-8">
+                    <h5 class="card-title text-success"><i class="bi bi-telephone"></i> {{ contact.phone_number }}</h5>
+                    <p class="card-text mb-1"><i class="bi bi-envelope"></i> <strong>Email:</strong> {{ contact.email }}</p>
+                    <p class="card-text mb-1"><i class="bi bi-info-circle"></i> <strong>Status:</strong> {{ contact.status }}</p>
+                    <p class="card-text mb-1"><i class="bi bi-geo-alt"></i> <strong>Miasto:</strong> {{ contact.city_of_residence }}</p>
+                    <p class="card-text text-muted"><small>Dodano: {{ contact.date|date:"d.m.Y" }}</small></p>
+                </div>
+                <div class="col-md-4 border-start border-secondary">
+                    <h6 class="text-muted">Aktualna pogoda:</h6>
+                    <p class="mb-1"><i class="bi bi-thermometer-half"></i> Temp: {{ contact.weather.temperature }}°C</p>
+                    <p class="mb-1"><i class="bi bi-droplet-half"></i> Wilgotność: {{ contact.weather.humidity }}%</p>
+                    <p class="mb-1"><i class="bi bi-wind"></i> Wiatr: {{ contact.weather.wind_speed }} km/h</p>
+                </div>
+
+            </div>
+            <div class="mt-3">
+                <a href="{% url 'contact:contact-edit' contact.pk %}" class="btn btn-success btn-sm">Edytuj</a>
+                <a href="{% url 'contact:contact-delete' contact.pk %}" class="btn btn-danger btn-sm">Usuń</a>
+            </div>
+        </div>
+    </div>
+{% endfor %}
+{% endblock %}

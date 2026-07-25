@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load crispy_forms_tags %}
+
+{% block title %}Import kontaktów{% endblock %}
+
+{% block container %}
+<h2 class="text-center mb-4"><i class="bi bi-filetype-csv text-success"></i> Importuj kontakty</h2>
+
+<div class="card mx-auto shadow-sm bg-dark text-white border-secondary" style="max-width: 500px;">
+    <div class="card-header border-secondary">
+        <h5 class="card-title mb-0">Wybierz plik z dysku</h5>
+    </div>
+    <div class="card-body">
+        <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            
+            <div class="mb-4">
+                <label for="csvFileInput" class="form-label">Wybierz plik CSV:</label>
+                <input type="file" name="csv_file" id="csvFileInput" accept=".csv" class="form-control bg-dark text-white border-secondary" required>
+            </div>
+            <div class="d-grid gap-2">
+                <button type="submit" class="btn btn-success">
+                    <i class="bi bi-cloud-upload"></i> Wgraj plik
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
