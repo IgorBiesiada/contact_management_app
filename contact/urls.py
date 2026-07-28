@@ -9,7 +9,7 @@ router.register(r'contacts', ContactViewSet, basename='api-contact')
 app_name = 'contact'
 
 urlpatterns = [
-    path('', ContactListView.as_view(), name='contact-list'),
+    path('list/', ContactListView.as_view(), name='contact-list'),
     path('add/', AddContactView.as_view(), name='contact-add'),
     path('delete/<int:pk>/', ContactDeleteView.as_view(), name='contact-delete'),
     path('edit/<int:pk>/', ContactUpdateView.as_view(), name='contact-edit'),

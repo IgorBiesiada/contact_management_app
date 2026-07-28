@@ -1,3 +1,5 @@
+import re
+
 from django.shortcuts import redirect, render
 from django.views.generic import ListView, UpdateView, DeleteView, CreateView
 from .models import Contact, ContactStatusChoices
@@ -10,23 +12,30 @@ import csv
 from django.contrib import messages
 from django.db.models import Q
 from django.db import transaction
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.mixins import LoginRequiredMixin
 # Create your views here.
 
-class AddContactView(CreateView):
+class AddContactView(CreateView, LoginRequiredMixin):
     model = Contact
     template_name = 'add.html'
     context_object_name = 'contact'
     form_class = ContactForm
-    success_url = '/'
+    success_url = reverse_lazy('contact:contact-list')
 
-class ContactListView(ListView):
+    def form_valid(self, form):
+        form.instance.user = self.request.user
+        return super().form_valid(form)
+    
+
+class ContactListView(ListView, LoginRequiredMixin):
     model = Contact
     template_name = 'list.html'
     context_object_name = 'contacts'
 
     def get_queryset(self):
         #using select_related to prevent the N+1 database queries problem for the 'status' foreign key
-        queryset = Contact.objects.select_related('status')
+        queryset = Contact.objects.filter(user=self.request.user).select_related('status')
         search_query = self.request.GET.get('q')
         sort_by = self.request.GET.get('sort')
 
@@ -61,27 +70,42 @@ class ContactListView(ListView):
                 contact.weather = None
         return context
 
-class ContactUpdateView(UpdateView):
+class ContactUpdateView(UpdateView, LoginRequiredMixin):
     model = Contact
     template_name = 'edit.html'
     context_object_name = 'contact'
     form_class = ContactForm
-    success_url = '/'
+    success_url = reverse_lazy('contact:contact-list')
+    
+    def get_queryset(self):
+        return Contact.objects.filter(user=self.request.user)
+    
 
-class ContactDeleteView(DeleteView):
+class ContactDeleteView(DeleteView, LoginRequiredMixin):
     model = Contact
     template_name = 'delete.html'
     success_url = reverse_lazy('contact:contact-list')
 
+    def get_queryset(self):
+        return Contact.objects.filter(user=self.request.user)
+
+
 class ContactViewSet(viewsets.ModelViewSet):
     queryset = Contact.objects.all()
+
+    def get_queryset(self):
+        return Contact.objects.filter(user=self.request.user)
 
     def get_serializer_class(self):
         if self.action == 'list':
             return ContactSerializer
         return ContactDetailSerializer
 
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+        
 
+@login_required
 @transaction.atomic
 def import_contacts(request):
     """
@@ -103,7 +127,7 @@ def import_contacts(request):
                 phone_number = row.get('phone', '')
 
                 # if statment for catching duplicate data
-                if Contact.objects.filter( Q(email=email) | Q(phone_number=phone_number)).exists():
+                if Contact.objects.filter(user=request.user).filter( Q(email=email) | Q(phone_number=phone_number)).exists():
                     continue
                     
                 status = row.get('status', '').strip()
@@ -114,6 +138,7 @@ def import_contacts(request):
                 #using get_or_create for prevents a situation where someone enters a status in the CSV file that does not yet exist in the database
                 status_obj = ContactStatusChoices.objects.get_or_create(name=status)[0] #[0] because we need to unpack the tuple
                 Contact.objects.create(
+                    user=request.user,
                     first_name=row.get('first_name', ''),
                     last_name=row.get('last_name', ''),
                     email=email,

@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
 
     'contact',
+    'users',
 
     'crispy_forms',
     'crispy_bootstrap5',
@@ -99,7 +100,7 @@ DATABASES = {
     }
 }
 
-DATABASE_URL = os.environ.get('DATABASE_CONNECTION_STRING')
+DATABASE_URL = os.environ.get('DB_CONNECTION_STRING')
 db_from_env = dj_database_url.config(
     default=DATABASE_URL,
     conn_max_age=500,
@@ -138,6 +139,7 @@ USE_I18N = True
 
 USE_TZ = True
 
+AUTH_USER_MODEL = 'users.CustomUser'
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
@@ -152,3 +154,5 @@ CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
 
 CRISPY_TEMPLATE_PACK = "bootstrap5"
 
+LOGIN_REDIRECT_URL = 'contact:contact-list'  
+LOGIN_URL = 'users:login'

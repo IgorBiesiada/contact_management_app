@@ -3,11 +3,21 @@
 Aplikacja webowa w Django do zarządzania kontaktami. Umożliwia dodawanie,
 edycję, usuwanie i wyszukiwanie kontaktów, ich sortowanie, zbiorczy import
 z pliku CSV, podgląd aktualnej pogody w mieście zamieszkania kontaktu oraz
-udostępnia REST API do zarządzania kontaktami.
+udostępnia REST API do zarządzania kontaktami. Dostęp do aplikacji wymaga
+zalogowania — każdy użytkownik widzi i zarządza wyłącznie własnymi
+kontaktami.
 
 ## Funkcjonalność
 
-- **Lista kontaktów** (`/`) z wyszukiwaniem po imieniu, nazwisku, emailu,
+- **Logowanie** (`/`) — prosty system uwierzytelniania oparty o wbudowany
+  Django `LoginView` (własny model użytkownika `CustomUser` w aplikacji
+  `users`). **Nie ma rejestracji** — konta użytkowników zakłada się z
+  poziomu panelu admina lub komendą `createsuperuser` (patrz sekcja
+  instalacji). Wszystkie widoki listy/dodawania/edycji/usuwania/importu
+  kontaktów wymagają zalogowania (`LOGIN_URL = 'users:login'`), a każdy
+  kontakt jest przypisany do konkretnego użytkownika (`Contact.user`) —
+  użytkownicy nie widzą nawzajem swoich kontaktów.
+- **Lista kontaktów** (`/list/`) z wyszukiwaniem po imieniu, nazwisku, emailu,
   numerze telefonu i mieście (`?q=`) oraz sortowaniem po nazwisku lub dacie
   dodania, rosnąco/malejąco (`?sort=last_name|date|-date`).
 - **Dodawanie** (`/add/`), **edycja** (`/edit/<id>/`) i **usuwanie**
@@ -18,9 +28,9 @@ udostępnia REST API do zarządzania kontaktami.
   bez zmian w kodzie.
 - **Import z CSV** (`/import/`) — masowe dodawanie kontaktów z pliku,
   operacja atomowa (jeśli import się nie powiedzie, żadne dane nie zostają
-  zapisane częściowo). Kontakty z już istniejącym emailem lub numerem
-  telefonu są pomijane. Jeśli w pliku brakuje statusu, ustawiany jest
-  domyślnie status `nowy`.
+  zapisane częściowo). Kontakty z już istniejącym (dla tego samego
+  zalogowanego użytkownika) emailem lub numerem telefonu są pomijane.
+  Jeśli w pliku brakuje statusu, ustawiany jest domyślnie status `nowy`.
 - **Pogoda w czasie rzeczywistym** — dla każdego kontaktu na liście
   pobierana jest aktualna temperatura, wilgotność i prędkość wiatru dla
   jego miasta zamieszkania. Realizowane przez dwuetapowe zapytanie:
@@ -28,7 +38,10 @@ udostępnia REST API do zarządzania kontaktami.
   współrzędnych (Open-Meteo). Wynik jest **cache'owany po stronie serwera
   przez 30 minut** (per nazwa miasta), żeby nie odpytywać zewnętrznych API
   przy każdym odświeżeniu listy.
-- **REST API** (Django REST Framework, `ContactViewSet` + `DefaultRouter`):
+- **REST API** (Django REST Framework, `ContactViewSet` + `DefaultRouter`).
+  Zwraca i modyfikuje wyłącznie kontakty zalogowanego użytkownika
+  (`get_queryset` filtruje po `request.user`, `perform_create` automatycznie
+  przypisuje nowy kontakt do zalogowanego użytkownika):
 
   | Metoda | Endpoint | Opis |
   |---|---|---|
@@ -38,14 +51,21 @@ udostępnia REST API do zarządzania kontaktami.
   | PUT / PATCH | `/api/contacts/{id}/` | edycja kontaktu |
   | DELETE | `/api/contacts/{id}/` | usunięcie kontaktu |
 
-  Serializer zwraca/przyjmuje pola: `id, first_name, last_name,
-  city_of_residence, status, date` (status jako nazwa tekstowa, np.
-  `"nowy"`, dzięki `SlugRelatedField`).
+  `GET /api/contacts/` (lista) korzysta z `ContactSerializer` — pola:
+  `id, first_name, last_name, city_of_residence, status, date` (zgodnie
+  z wymaganiami zadania). Pozostałe akcje (`POST`, `GET` szczegóły,
+  `PUT`/`PATCH`, `DELETE`) korzystają z `ContactDetailSerializer`, który
+  obejmuje też `phone_number` i `email` — dzięki temu dodawanie/edycja
+  kontaktu przez API faktycznie pozwala ustawić wszystkie pola. Status
+  podaje się jako nazwa tekstowa (np. `"nowy"`), dzięki `SlugRelatedField`.
 
-  > **Uwaga:** serializer nie obejmuje pól `phone_number` i `email` —
-  > REST API w obecnej postaci nie pozwala ich ustawić/zaktualizować.
-  > Jeśli endpointy mają też zarządzać tymi danymi, trzeba dodać je do
-  > `fields` w `ContactSerializer`.
+  > **Uwaga:** `ContactViewSet` nie ma jawnie ustawionych `permission_classes`
+  > (np. `IsAuthenticated`) — dostęp do API zakłada zalogowanego użytkownika
+  > tylko przez filtrowanie w `get_queryset()` po `request.user`. Dla
+  > niezalogowanego żądania `request.user` to `AnonymousUser`, co przy próbie
+  > filtrowania po polu `ForeignKey` do `CustomUser` kończy się błędem
+  > serwera (500), zamiast czytelnego `401/403`. Warto dodać
+  > `permission_classes = [IsAuthenticated]` do `ContactViewSet`.
 
 ## Stack technologiczny
 
@@ -57,6 +77,8 @@ udostępnia REST API do zarządzania kontaktami.
   (domyślnie: SQLite, bez dodatkowej konfiguracji)
 - python-dotenv — wczytywanie zmiennych z pliku `.env`
 - Docker + Docker Compose — konteneryzacja (app + PostgreSQL + Adminer), patrz sekcja niżej
+- Django auth (`django.contrib.auth`) — logowanie oparte o własny model
+  użytkownika `CustomUser` (aplikacja `users`), bez rejestracji
 
 ## Struktura projektu (skrót)
 
@@ -74,9 +96,14 @@ udostępnia REST API do zarządzania kontaktami.
 │   ├── forms.py               # ContactForm
 │   ├── views.py                # widoki CRUD, import CSV, ContactViewSet
 │   ├── urls.py                  # routing widoków + /api/contacts/
-│   ├── serializers.py            # ContactSerializer
+│   ├── serializers.py            # ContactSerializer, ContactDetailSerializer
 │   └── services.py                # get_weather_for_city (Nominatim + Open-Meteo, cache)
-├── templates/               # add.html, list.html, edit.html, delete.html, import.html
+├── users/                    # logowanie (bez rejestracji)
+│   ├── models.py              # CustomUser (AbstractUser)
+│   ├── forms.py                 # UserLoginForm
+│   ├── views.py                  # LoginUserView, logout_view
+│   └── urls.py                    # '/', '/logout/'
+├── templates/               # add.html, list.html, edit.html, delete.html, import.html, login_form.html
 └── static/
 ```
 
@@ -126,12 +153,12 @@ DEBUG=True
 - `SECRET_KEY` — wymagany, Django nie wystartuje bez niego (`os.getenv('SECRET_KEY')`
   nie ma wartości domyślnej).
 - `DEBUG` — ustaw `True` w trakcie developmentu, `False` na produkcji.
-- `DATABASE_CONNECTION_STRING` — **opcjonalny**. Jeśli go nie ustawisz,
+- `DB_CONNECTION_STRING` — **opcjonalny**. Jeśli go nie ustawisz,
   aplikacja użyje lokalnej bazy SQLite (`db.sqlite3`) i nie musisz nic więcej
   konfigurować. Jeśli chcesz użyć PostgreSQL, podaj connection string w
   formacie:
   ```env
-  DATABASE_CONNECTION_STRING=postgres://user:password@localhost:5432/dbname
+  DB_CONNECTION_STRING=postgres://user:password@localhost:5432/dbname
   ```
 
 ### 6. Migracja bazy danych
@@ -153,11 +180,18 @@ python manage.py shell -c "from contact.models import ContactStatusChoices; Cont
 
 *(Import przez CSV tworzy statusy automatycznie, więc przy imporcie ten krok nie jest konieczny.)*
 
-### 8. Utworzenie konta administratora
+### 8. Utworzenie konta użytkownika (logowanie)
+
+Aplikacja **nie ma formularza rejestracji** — to jedyny sposób na
+utworzenie konta, którym można się zalogować i korzystać z aplikacji:
 
 ```bash
 python manage.py createsuperuser
 ```
+
+Powstałym kontem logujesz się na stronie głównej (`/`) i dopiero wtedy
+masz dostęp do listy/dodawania/edycji kontaktów oraz importu CSV — wszystkie
+te widoki wymagają zalogowania.
 
 ### 9. Uruchomienie serwera developerskiego
 
@@ -167,7 +201,9 @@ python manage.py runserver
 
 Aplikacja będzie dostępna pod adresem: **http://127.0.0.1:8000/**
 
-- Lista/zarządzanie kontaktami: `http://127.0.0.1:8000/`
+- Logowanie: `http://127.0.0.1:8000/` (bez zalogowania pozostałe widoki przekierują tutaj)
+- Wylogowanie: `http://127.0.0.1:8000/logout/`
+- Lista/zarządzanie kontaktami: `http://127.0.0.1:8000/list/`
 - Dodawanie kontaktu: `http://127.0.0.1:8000/add/`
 - Import CSV: `http://127.0.0.1:8000/import/`
 - Panel admina: `http://127.0.0.1:8000/admin/`
@@ -244,6 +280,28 @@ docker compose down          # zatrzymuje kontenery
 docker compose down -v       # dodatkowo usuwa wolumen z danymi bazy
 ```
 
+## Znane problemy do sprawdzenia (logowanie)
+
+- **Kolejność mixinów w widokach opartych o klasy.** `AddContactView`,
+  `ContactListView`, `ContactUpdateView`, `ContactDeleteView` są
+  zdefiniowane jako `class XView(SomeGenericView, LoginRequiredMixin):`.
+  Django zaleca odwrotną kolejność —
+  `class XView(LoginRequiredMixin, SomeGenericView):` — bo mixiny
+  odpowiadające za kontrolę dostępu muszą być **pierwsze** w liście klas
+  bazowych, żeby ich `dispatch()` faktycznie przechwycił żądanie przed
+  resztą logiki widoku. Przy obecnej kolejności `LoginRequiredMixin` może
+  nie działać tak, jak powinien — warto to zweryfikować (spróbować wejść
+  na `/list/` w przeglądarce incognito, bez logowania) i w razie potrzeby
+  zamienić kolejność klas bazowych.
+- **Unikalność numeru telefonu.** W `Contact.Meta.constraints` telefon nie
+  ma już samodzielnego ograniczenia unikalności — jest tylko część
+  złożonego `UniqueConstraint(fields=['email', 'phone_number'], ...)`.
+  W praktyce oznacza to, że **ten sam numer telefonu może dziś wystąpić
+  wielokrotnie** (nawet u tego samego użytkownika), o ile towarzyszy mu
+  inny adres email — co nie do końca spełnia wymóg zadania "numery
+  telefonów... nie mogą się powtarzać". Warto rozważyć dodanie osobnego
+  `UniqueConstraint(fields=['user', 'phone_number'])`.
+
 ## Import kontaktów z CSV
 
 Plik CSV powinien mieć nagłówek z następującymi kolumnami:
@@ -253,8 +311,9 @@ first_name,last_name,email,phone,city_of_residence,status
 ```
 
 - `status` jest opcjonalny — jeśli pominięty, kontakt otrzyma status `nowy`.
-- Wiersze z emailem lub numerem telefonu, który już istnieje w bazie, są
-  pomijane.
+- Wiersze z emailem lub numerem telefonu, który już istnieje w bazie **dla
+  tego samego zalogowanego użytkownika**, są pomijane (inni użytkownicy
+  mogą mieć kontakt z tym samym adresem/numerem).
 
 Przykład:
 
@@ -275,6 +334,10 @@ sieci albo Nominatim/Open-Meteo są niedostępne, pogoda dla danego kontaktu
 nie zostanie wyświetlona.
 
 ## Testowanie REST API (przykład z `curl`)
+
+> Endpointy filtrują dane po zalogowanym użytkowniku, więc `curl` bez
+> przekazania ciasteczka sesji (po zalogowaniu przez `/`) może zwrócić
+> błąd zamiast oczekiwanego wyniku — patrz uwaga w sekcji REST API wyżej.
 
 ```bash
 # Lista kontaktów
