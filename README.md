@@ -56,12 +56,15 @@ udostępnia REST API do zarządzania kontaktami.
 - dj-database-url + psycopg — obsługa PostgreSQL przez zmienną środowiskową
   (domyślnie: SQLite, bez dodatkowej konfiguracji)
 - python-dotenv — wczytywanie zmiennych z pliku `.env`
+- Docker + Docker Compose — konteneryzacja (app + PostgreSQL + Adminer), patrz sekcja niżej
 
 ## Struktura projektu (skrót)
 
 ```
 ├── manage.py
 ├── requirements.txt
+├── Dockerfile
+├── docker-compose.yaml
 ├── config/                 # ustawienia projektu
 │   ├── settings.py
 │   ├── urls.py
@@ -169,6 +172,77 @@ Aplikacja będzie dostępna pod adresem: **http://127.0.0.1:8000/**
 - Import CSV: `http://127.0.0.1:8000/import/`
 - Panel admina: `http://127.0.0.1:8000/admin/`
 - REST API: `http://127.0.0.1:8000/api/contacts/`
+
+## Uruchomienie z Dockerem (docker-compose)
+
+Projekt zawiera `Dockerfile` oraz `docker-compose.yaml`, więc zamiast
+kroków 1–9 z sekcji powyżej można postawić całość jedną komendą — łącznie
+z bazą PostgreSQL i panelem Adminer do jej podglądu.
+
+Skład środowiska (`docker-compose.yaml`):
+
+| Usługa | Opis | Port |
+|---|---|---|
+| `web` | aplikacja Django (budowana z `Dockerfile`, migracje odpalają się automatycznie przy starcie) | `8000` |
+| `db` | baza PostgreSQL 17 z danymi trzymanymi w wolumenie `postgres_data` | — (wewnętrzny) |
+| `adminer` | graficzny panel do podglądu bazy danych | `8080` |
+
+### 1. Wymagania wstępne
+
+- Docker + Docker Compose
+
+### 2. Plik `.env`
+
+`docker-compose.yaml` wczytuje zmienne z pliku `.env` w katalogu głównym
+projektu (przekazywane do kontenera `web` przez `env_file`, a do samego
+`docker-compose.yaml` — np. na potrzeby healthchecka bazy — jako zmienne
+środowiskowe hosta). Utwórz `.env`:
+
+```env
+SECRET_KEY=wpisz-tu-dlugi-losowy-ciag-znakow
+DEBUG=True
+DOCKER_DB_STRING=postgres://postgres:1234@db:5432/rekrutacja
+DB_USER=postgres
+DB_NAME=rekrutacja
+```
+
+> **Uwaga:** `DB_USER`/`DB_NAME` muszą się zgadzać z danymi bazy zaszytymi
+> na sztywno w `docker-compose.yaml` (`POSTGRES_USER=postgres`,
+> `POSTGRES_DB=rekrutacja`) — inaczej healthcheck usługi `db` będzie
+> sprawdzał złą nazwę bazy/użytkownika i `web` może nie wystartować,
+> czekając na `service_healthy`.
+
+### 3. Budowa i uruchomienie kontenerów
+
+```bash
+docker compose up --build
+```
+
+`Dockerfile` przy starcie kontenera `web` sam odpala migracje
+(`python manage.py migrate`) i serwer developerski Django
+(`0.0.0.0:8000`), więc nie trzeba nic robić ręcznie.
+
+### 4. Dostęp do aplikacji
+
+- Aplikacja: **http://localhost:8000/**
+- Panel Adminer (podgląd bazy PostgreSQL): **http://localhost:8080/**
+  — System: `PostgreSQL`, Serwer: `db`, Użytkownik: `postgres`,
+  Hasło: `1234`, Baza danych: `rekrutacja`
+
+### 5. Konto administratora w kontenerze
+
+`createsuperuser` trzeba uruchomić wewnątrz działającego kontenera `web`:
+
+```bash
+docker compose exec web python manage.py createsuperuser
+```
+
+### 6. Zatrzymanie i sprzątanie
+
+```bash
+docker compose down          # zatrzymuje kontenery
+docker compose down -v       # dodatkowo usuwa wolumen z danymi bazy
+```
 
 ## Import kontaktów z CSV
 
